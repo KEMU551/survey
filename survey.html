@@ -6,94 +6,130 @@
   <title>イベントアンケート ＆ 引き換え券</title>
   <style>
     :root {
-      --primary-color: #4f46e5;
-      --success-color: #10b981;
-      --error-color: #ef4444;
-      --bg-color: #f3f4f6;
+      --primary-color: #ff7a45; /* 温かみのあるオレンジ */
+      --primary-hover: #e05e2b;
+      --bg-color: #fff9f5;      /* 薄いオレンジ系の背景 */
+      --card-bg: #ffffff;
+      --text-color: #4a3728;    /* 読みやすいブラウン系の文字 */
+      --accent-color: #ff9c6e;
+      --gray-color: #8c7e74;
     }
     body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       background-color: var(--bg-color);
       margin: 0;
       padding: 16px;
-      color: #1f2937;
+      color: var(--text-color);
     }
     .container {
       max-width: 500px;
       margin: 0 auto;
-      background: white;
+      background: var(--card-bg);
       padding: 24px;
-      border-radius: 12px;
-      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+      border-radius: 16px;
+      box-shadow: 0 8px 16px rgba(255, 122, 69, 0.1);
+      border: 2px solid #ffe8dc;
     }
     h1 {
       font-size: 1.5rem;
       text-align: center;
-      margin-bottom: 24px;
-      color: #111827;
+      margin-bottom: 20px;
+      color: var(--primary-color);
     }
     .hidden { display: none !important; }
     
+    /* 警告・注意書きヘッダー */
+    .notice-header {
+      padding: 10px 14px;
+      border-radius: 8px;
+      font-size: 0.9rem;
+      font-weight: bold;
+      text-align: center;
+      margin-bottom: 20px;
+    }
+    .notice-private {
+      background-color: #e6f7ff;
+      color: #0050b3;
+      border: 1px solid #91d5ff;
+    }
+    .notice-public {
+      background-color: #fff7e6;
+      color: #d46b08;
+      border: 1px solid #ffd591;
+    }
+
     /* フォームパーツ */
     .form-group {
       margin-bottom: 20px;
     }
     label {
       display: block;
-      font-weight: 600;
+      font-weight: bold;
       margin-bottom: 8px;
+      font-size: 0.95rem;
     }
-    select, textarea, input[type="password"] {
+    select, textarea {
       width: 100%;
-      padding: 10px;
-      border: 1px solid #d1d5db;
-      border-radius: 6px;
+      padding: 12px;
+      border: 2px solid #ffd591;
+      border-radius: 8px;
       box-sizing: border-box;
       font-size: 1rem;
+      color: var(--text-color);
+      background-color: #fffdfb;
+    }
+    select:focus, textarea:focus {
+      outline: none;
+      border-color: var(--primary-color);
     }
     button {
       width: 100%;
       background-color: var(--primary-color);
       color: white;
       border: none;
-      padding: 12px;
-      border-radius: 6px;
-      font-size: 1rem;
+      padding: 14px;
+      border-radius: 8px;
+      font-size: 1.1rem;
       font-weight: bold;
       cursor: pointer;
-      transition: opacity 0.2s;
+      transition: background 0.2s;
+    }
+    button:hover {
+      background-color: var(--primary-hover);
     }
     button:disabled {
-      background-color: #9ca3af;
+      background-color: #d9d9d9;
       cursor: not-allowed;
     }
     
     /* チケット画面の装飾 */
     .ticket {
-      border: 2px dashed var(--primary-color);
-      border-radius: 8px;
-      padding: 20px;
+      border: 3px dashed var(--primary-color);
+      border-radius: 12px;
+      padding: 24px;
       text-align: center;
-      background-color: #fbfbfe;
-      margin-bottom: 20px;
+      background-color: #fffdfb;
+      margin-bottom: 24px;
     }
     .ticket-title {
-      font-size: 1.4rem;
+      font-size: 1.6rem;
       color: var(--primary-color);
       font-weight: bold;
       margin-bottom: 10px;
     }
     .claimed {
-      border-color: #9ca3af;
-      background-color: #f3f4f6;
+      border-color: #bfbfbf;
+      background-color: #f5f5f5;
     }
     .claimed .ticket-title {
-      color: #9ca3af;
+      color: #8c8c8c;
       text-decoration: line-through;
     }
     .loading-spinner {
       text-align: center;
       padding: 20px;
+      font-weight: bold;
+      color: var(--primary-color);
     }
   </style>
 </head>
@@ -111,73 +147,80 @@
       </p>
     </div>
 
-    <!-- アンケート入力フォーム -->
-    <form id="survey-form">
-      <h1>イベントアンケート</h1>
-      
-      <!-- 選択式質問 (5問) -->
-      <div class="form-group">
-        <label>Q1. 本日のイベントはいかがでしたか？</label>
-        <select name="q1" required>
-          <option value="">選択してください</option>
-          <option value="大変満足">大変満足</option>
-          <option value="満足">満足</option>
-          <option value="普通">普通</option>
-          <option value="不満">不満</option>
-        </select>
-      </div>
+    <!-- STEP 1: 選択式アンケート (Q1〜Q5) -->
+    <div id="step-survey">
+      <div class="notice-header notice-private">🔒 このステップの回答は公開されません</div>
+      <form id="survey-form">
+        <h1>アンケート回答</h1>
+        
+        <div class="form-group">
+          <label>Q1. 本日のイベントはいかがでしたか？</label>
+          <select name="q1" required>
+            <option value="">選択してください</option>
+            <option value="大変満足">大変満足</option>
+            <option value="満足">満足</option>
+            <option value="普通">普通</option>
+            <option value="不満">不満</option>
+          </select>
+        </div>
 
-      <div class="form-group">
-        <label>Q2. 会場の雰囲気はいかがでしたか？</label>
-        <select name="q2" required>
-          <option value="">選択してください</option>
-          <option value="良い">良い</option>
-          <option value="普通">普通</option>
-          <option value="改善の余地あり">改善の余地あり</option>
-        </select>
-      </div>
+        <div class="form-group">
+          <label>Q2. 会場の雰囲気はいかがでしたか？</label>
+          <select name="q2" required>
+            <option value="">選択してください</option>
+            <option value="良い">良い</option>
+            <option value="普通">普通</option>
+            <option value="改善の余地あり">改善の余地あり</option>
+          </select>
+        </div>
 
-      <div class="form-group">
-        <label>Q3. イベントを知ったきっかけは何ですか？</label>
-        <select name="q3" required>
-          <option value="">選択してください</option>
-          <option value="SNS">SNS</option>
-          <option value="知人の紹介">知人の紹介</option>
-          <option value="チラシ・ポスター">チラシ・ポスター</option>
-          <option value="その他">その他</option>
-        </select>
-      </div>
+        <div class="form-group">
+          <label>Q3. イベントを知ったきっかけは何ですか？</label>
+          <select name="q3" required>
+            <option value="">選択してください</option>
+            <option value="SNS">SNS</option>
+            <option value="知人の紹介">知人の紹介</option>
+            <option value="チラシ・ポスター">チラシ・ポスター</option>
+            <option value="その他">その他</option>
+          </select>
+        </div>
 
-      <div class="form-group">
-        <label>Q4. 次回も参加したいですか？</label>
-        <select name="q4" required>
-          <option value="">選択してください</option>
-          <option value="ぜひ参加したい">ぜひ参加したい</option>
-          <option value="内容次第で参加したい">内容次第で参加したい</option>
-          <option value="参加しない">参加しない</option>
-        </select>
-      </div>
+        <div class="form-group">
+          <label>Q4. 次回も参加したいですか？</label>
+          <select name="q4" required>
+            <option value="">選択してください</option>
+            <option value="ぜひ参加したい">ぜひ参加したい</option>
+            <option value="内容次第で参加したい">内容次第で参加したい</option>
+            <option value="参加しない">参加しない</option>
+          </select>
+        </div>
 
-      <div class="form-group">
-        <label>Q5. お住まいの地域を教えてください</label>
-        <select name="q5" required>
-          <option value="">選択してください</option>
-          <option value="市内">市内</option>
-          <option value="県内（市外）">県内（市外）</option>
-          <option value="県外">県外</option>
-        </select>
-      </div>
+        <div class="form-group">
+          <label>Q5. お住まいの地域を教えてください</label>
+          <select name="q5" required>
+            <option value="">選択してください</option>
+            <option value="市内">市内</option>
+            <option value="県内（市外）">県内（市外）</option>
+            <option value="県外">県外</option>
+          </select>
+        </div>
 
-      <!-- 最後に表示されるメッセージ入力欄 -->
+        <button type="button" id="to-message-btn">次へ（メッセージ入力へ）</button>
+      </form>
+    </div>
+
+    <!-- STEP 2: メッセージ入力 -->
+    <div id="step-message" class="hidden">
+      <div class="notice-header notice-public">📢 メッセージは会場のスクリーンに公開されます！</div>
+      <h1>メッセージ入力</h1>
       <div class="form-group">
         <label for="message">会場のスクリーンに届くメッセージをどうぞ！</label>
-        <textarea id="message" name="message" rows="3" placeholder="コメントを入力してください（任意）" maxlength="100"></textarea>
+        <textarea id="message" rows="4" placeholder="応援コメントや感想を入力してください（任意）" maxlength="100"></textarea>
       </div>
+      <button type="button" id="submit-btn">メッセージを送信して賞品をもらう</button>
+    </div>
 
-      <button type="submit" id="submit-btn">アンケートを送信して賞品をもらう</button>
-    </form>
-
-    <!-- 賞品引き換え・スタッフ消込画面 -->
+    <!-- STEP 3: 賞品引き換え・スタッフ消込画面 -->
     <div id="ticket-view" class="hidden">
       <h1>賞品引き換え画面</h1>
       
@@ -186,13 +229,9 @@
         <p id="ticket-status-text">スタッフにこの画面を提示してください</p>
       </div>
 
-      <!-- スタッフ専用消込エリア -->
+      <!-- スタッフ専用消込エリア（確認ダイヤログ方式） -->
       <div id="staff-area">
-        <div class="form-group">
-          <label for="passcode" style="color: var(--error-color);">【スタッフ専用】消込パスコード</label>
-          <input type="password" id="passcode" placeholder="4桁のコードを入力">
-        </div>
-        <button id="claim-btn" style="background-color: var(--success-color);">消込を処理する</button>
+        <button id="claim-btn" style="background-color: #389e0d;">【スタッフ操作】消込処理をする</button>
       </div>
     </div>
   </div>
@@ -201,7 +240,8 @@
     // ⚠️ 取得したGASのウェブアプリURLをここに貼り付けてください
     const GAS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwCYEdOgFAy09NT9-KjcKNARvFM0IegazLoCjMOi-nZOU1m97OmFp8u3rvw66IGQUWgYQ/exec";
 
-    const surveyForm = document.getElementById('survey-form');
+    const stepSurvey = document.getElementById('step-survey');
+    const stepMessage = document.getElementById('step-message');
     const ticketView = document.getElementById('ticket-view');
     const ticketBox = document.getElementById('ticket-box');
     const ticketStatusText = document.getElementById('ticket-status-text');
@@ -209,23 +249,23 @@
     const loading = document.getElementById('loading');
     const staffArea = document.getElementById('staff-area');
     const claimBtn = document.getElementById('claim-btn');
-    const passcodeInput = document.getElementById('passcode');
+    const toMessageBtn = document.getElementById('to-message-btn');
+    const submitBtn = document.getElementById('submit-btn');
 
+    let surveyData = {};
     let currentResponseId = null;
 
     // ページロード時の初期処理
     window.addEventListener('DOMContentLoaded', async () => {
-      // 1. 本日の送信制限チェック (⑦の機能)
-      const todayStr = new Date().toISOString().split('T')[0]; // 例: "2026-07-17"
+      const todayStr = new Date().toISOString().split('T')[0];
       const lastSubmitDate = localStorage.getItem('last_submit_date');
       const savedResponseId = localStorage.getItem('current_response_id');
 
       if (lastSubmitDate === todayStr) {
-        // 今日すでに送信している場合
-        surveyForm.classList.add('hidden');
+        // 今日すでに送信している場合、アンケート画面を非表示にする
+        stepSurvey.classList.add('hidden');
         
         if (savedResponseId) {
-          // 引き換え券が残っているかサーバーに確認
           showLoading(true);
           const isClaimed = await checkClaimStatusFromServer(savedResponseId);
           showLoading(false);
@@ -233,26 +273,40 @@
           currentResponseId = savedResponseId;
           showTicketView(isClaimed);
         } else {
-          // 引き換え券情報がない場合は単に制限画面
           alreadySubmittedView.classList.remove('hidden');
         }
       }
     });
 
-    // アンケート送信処理
-    surveyForm.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      showLoading(true);
-
-      const formData = new FormData(surveyForm);
-      const payload = {
-        action: 'submitForm',
+    // STEP 1 から STEP 2 への遷移
+    toMessageBtn.addEventListener('click', () => {
+      const form = document.getElementById('survey-form');
+      if (!form.reportValidity()) {
+        return; // バリデーションエラー時は遷移しない
+      }
+      
+      const formData = new FormData(form);
+      surveyData = {
         q1: formData.get('q1'),
         q2: formData.get('q2'),
         q3: formData.get('q3'),
         q4: formData.get('q4'),
-        q5: formData.get('q5'),
-        message: formData.get('message')
+        q5: formData.get('q5')
+      };
+
+      stepSurvey.classList.add('hidden');
+      stepMessage.classList.remove('hidden');
+    });
+
+    // STEP 2 送信処理
+    submitBtn.addEventListener('click', async () => {
+      showLoading(true);
+      const messageText = document.getElementById('message').value;
+
+      const payload = {
+        action: 'submitForm',
+        ...surveyData,
+        message: messageText
       };
 
       try {
@@ -265,13 +319,13 @@
         if (result.status === 'success') {
           currentResponseId = result.id;
           
-          // 送信履歴をローカルに保存（1日1回制限用）
+          // 送信履歴をローカルに保存
           const todayStr = new Date().toISOString().split('T')[0];
           localStorage.setItem('last_submit_date', todayStr);
           localStorage.setItem('current_response_id', currentResponseId);
 
-          // 引き換え画面へ移行
-          surveyForm.classList.add('hidden');
+          // メッセージ入力画面を隠して引き換え画面へ
+          stepMessage.classList.add('hidden');
           showTicketView(false);
         } else {
           alert('送信に失敗しました。もう一度お試しください。');
@@ -284,13 +338,10 @@
       }
     });
 
-    // スタッフ消込ボタンクリック処理
+    // スタッフ消込ボタンクリック処理（確認ダイアログ）
     claimBtn.addEventListener('click', async () => {
-      const passcode = passcodeInput.value.trim();
-      if (!passcode) {
-        alert('パスコードを入力してください。');
-        return;
-      }
+      const confirmClaim = confirm("【スタッフ確認】\n本当に賞品の引き換え（消込処理）を実行しますか？");
+      if (!confirmClaim) return;
 
       showLoading(true);
       try {
@@ -299,7 +350,7 @@
           body: JSON.stringify({
             action: 'claimPrize',
             id: currentResponseId,
-            passcode: passcode
+            passcode: "1234" // スプレッドシート側の消込動作用にダミー送信（スプレッドシート処理側の変更は不要です）
           })
         });
         const result = await response.json();
@@ -327,7 +378,6 @@
       }
     }
 
-    // サーバー上の引き換え状態を確認
     async function checkClaimStatusFromServer(id) {
       try {
         const response = await fetch(`${GAS_WEB_APP_URL}?action=checkStatus&id=${id}`);
@@ -339,18 +389,16 @@
       }
     }
 
-    // 引き換え画面の表示切替
     function showTicketView(isClaimed) {
       ticketView.classList.remove('hidden');
       if (isClaimed) {
         ticketBox.classList.add('claimed');
         ticketStatusText.innerHTML = "✨ <b>引き換え済み</b> ✨<br>ありがとうございました！";
-        staffArea.classList.add('hidden'); // 消込エリアを非表示にする
+        staffArea.classList.add('hidden');
       } else {
         ticketBox.classList.remove('claimed');
         ticketStatusText.innerHTML = "スタッフにこの画面を提示してください";
         staffArea.classList.remove('hidden');
-        passcodeInput.value = "";
       }
     }
   </script>
