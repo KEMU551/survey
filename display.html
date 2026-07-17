@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>コメント表示スクリーン</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      background-color: #050505;
+      color: #ffffff;
+      font-family: 'Helvetica Neue', Arial, 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+      overflow: hidden;
+      height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+
+    /* メッセージを表示する外枠のコンテナ */
+    .screen-container {
+      width: 90vw;
+      height: 80vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      position: relative;
+    }
+
+    /* メッセージテキスト自体のスタイル */
+    .message-card {
+      font-size: 4.5rem;
+      font-weight: bold;
+      text-align: center;
+      line-height: 1.4;
+      max-width: 100%;
+      word-break: break-all;
+      opacity: 0;
+      transform: translateY(30px);
+      transition: opacity 0.8s ease, transform 0.8s ease;
+      position: absolute;
+    }
+
+    /* 表示状態のアニメーション用クラス */
+    .message-card.active {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    /* 待機中メッセージ */
+    .no-message {
+      font-size: 2.5rem;
+      color: #666;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="screen-container" id="screen">
+    <div class="no-message" id="fallback">メッセージを待っています...</div>
+  </div>
+
+  <script>
+    // ⚠️ 取得したGASのウェブアプリURLをここに貼り付けてください
+    const GAS_WEB_APP_URL = "ここにGASで取得したウェブアプリのURLを貼り付ける";
+    
+    const screen = document.getElementById('screen');
+    const fallback = document.getElementById('fallback');
+    
+    let messageList = [];  // スプレッドシートから取得した最新10件の格納用
+    let currentIndex = 0;  // 現在何番目を表示しているか
+    let loopInterval = null;
+
+    // 🔄 1. サーバーから最新10件を引っ張ってくる関数
+    async function fetchLatestMessages() {
+      try {
+        const response = await fetch(`${GAS_WEB_APP_URL}?action=getMessages`);
+        const result = await response.json();
+        
+        if (result.status === 'success' && result.messages.length > 0) {
+          // メッセージリストを更新
+          messageList = result.messages;
+          fallback.classList.add('hidden');
+          
+          // ループタイマーがまだ動いていなければ起動
+          if (!loopInterval) {
+            startLoop();
+          }
+        } else if (result.messages.length === 0) {
+          messageList = [];
+          fallback.classList.remove('hidden');
+          fallback.innerText = "メッセージを待っています...";
+        }
+      } catch (err) {
+        console.error("データ取得エラー:", err);
+      }
+    }
+
+    // 🎬 2. 5秒間隔のローテーションループを開始する関数
+    function startLoop() {
+      // 最初の1件目を即座に表示
+      renderNextMessage();
+      
+      // 以降、5秒ごとにループ
+      loopInterval = setInterval(() => {
+        renderNextMessage();
+      }, 5000);
+    }
+
+    // 📐 3. 次のメッセージを画面に描画する関数（スライド・フェードイン効果）
+    function renderNextMessage() {
+      if (messageList.length === 0) return;
+
+      // インデックスが配列を超えたら0に戻す（10件のループ再生）
+      if (currentIndex >= messageList.length) {
+        currentIndex = 0;
+      }
+
+      const text = messageList[currentIndex];
+      currentIndex++;
+
+      // 古い要素があればフェードアウトさせて消す
+      const oldCard = document.querySelector('.message-card');
+      if (oldCard) {
+        oldCard.style.opacity = '0';
+        oldCard.style.transform = 'translateY(-30px)';
+        setTimeout(() => oldCard.remove(), 800);
+      }
+
+      // 新しいメッセージカードを生成して追加
+      const newCard = document.createElement('div');
+      newCard.className = 'message-card';
+      newCard.innerText = text;
+      screen.appendChild(newCard);
+
+      // 一瞬だけ遅らせてアニメーションを発火させる
+      setTimeout(() => {
+        newCard.classList.add('active');
+      }, 50);
+    }
+
+    // 🚀 初期起動時の処理
+    window.addEventListener('DOMContentLoaded', () => {
+      // 最初にデータを取得
+      fetchLatestMessages();
+      
+      // その後は30秒ごとにスプレッドシートの最新状態（不適切非表示や新規投稿）を確認
+      setInterval(fetchLatestMessages, 30000);
+    });
+  </script>
+</body>
+</html>
