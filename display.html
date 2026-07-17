@@ -3,152 +3,404 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>コメント表示スクリーン</title>
+  <title>イベントアンケート ＆ 引き換え券</title>
   <style>
+    :root {
+      --primary-color: #ff7a45; /* 温かみのあるオレンジ */
+      --primary-hover: #e05e2b;
+      --bg-color: #fff9f5;      /* 薄いオレンジ系の背景 */
+      --card-bg: #ffffff;
+      --text-color: #4a3728;    /* 読みやすいブラウン系の文字 */
+      --accent-color: #ff9c6e;
+      --gray-color: #8c7e74;
+    }
     body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background-color: var(--bg-color);
       margin: 0;
-      padding: 0;
-      background-color: #050505;
-      color: #ffffff;
-      font-family: 'Helvetica Neue', Arial, 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
-      overflow: hidden;
-      height: 100vh;
-      display: flex;
-      justify-content: center;
-      align-items: center;
+      padding: 16px;
+      color: var(--text-color);
     }
-
-    /* メッセージを表示する外枠のコンテナ */
-    .screen-container {
-      width: 90vw;
-      height: 80vh;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      position: relative;
+    .container {
+      max-width: 500px;
+      margin: 0 auto;
+      background: var(--card-bg);
+      padding: 24px;
+      border-radius: 16px;
+      box-shadow: 0 8px 16px rgba(255, 122, 69, 0.1);
+      border: 2px solid #ffe8dc;
     }
-
-    /* メッセージテキスト自体のスタイル */
-    .message-card {
-      font-size: 4.5rem;
+    h1 {
+      font-size: 1.5rem;
+      text-align: center;
+      margin-bottom: 20px;
+      color: var(--primary-color);
+    }
+    .hidden { display: none !important; }
+    
+    /* 警告・注意書きヘッダー */
+    .notice-header {
+      padding: 10px 14px;
+      border-radius: 8px;
+      font-size: 0.9rem;
       font-weight: bold;
       text-align: center;
-      line-height: 1.4;
-      max-width: 100%;
-      word-break: break-all;
-      opacity: 0;
-      transform: translateY(30px);
-      transition: opacity 0.8s ease, transform 0.8s ease;
-      position: absolute;
+      margin-bottom: 20px;
+    }
+    .notice-private {
+      background-color: #e6f7ff;
+      color: #0050b3;
+      border: 1px solid #91d5ff;
+    }
+    .notice-public {
+      background-color: #fff7e6;
+      color: #d46b08;
+      border: 1px solid #ffd591;
     }
 
-    /* 表示状態のアニメーション用クラス */
-    .message-card.active {
-      opacity: 1;
-      transform: translateY(0);
+    /* フォームパーツ */
+    .form-group {
+      margin-bottom: 20px;
     }
-
-    /* 待機中メッセージ */
-    .no-message {
-      font-size: 2.5rem;
-      color: #666;
+    label {
+      display: block;
+      font-weight: bold;
+      margin-bottom: 8px;
+      font-size: 0.95rem;
+    }
+    select, textarea {
+      width: 100%;
+      padding: 12px;
+      border: 2px solid #ffd591;
+      border-radius: 8px;
+      box-sizing: border-box;
+      font-size: 1rem;
+      color: var(--text-color);
+      background-color: #fffdfb;
+    }
+    select:focus, textarea:focus {
+      outline: none;
+      border-color: var(--primary-color);
+    }
+    button {
+      width: 100%;
+      background-color: var(--primary-color);
+      color: white;
+      border: none;
+      padding: 14px;
+      border-radius: 8px;
+      font-size: 1.1rem;
+      font-weight: bold;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    button:hover {
+      background-color: var(--primary-hover);
+    }
+    button:disabled {
+      background-color: #d9d9d9;
+      cursor: not-allowed;
+    }
+    
+    /* チケット画面の装飾 */
+    .ticket {
+      border: 3px dashed var(--primary-color);
+      border-radius: 12px;
+      padding: 24px;
       text-align: center;
+      background-color: #fffdfb;
+      margin-bottom: 24px;
+    }
+    .ticket-title {
+      font-size: 1.6rem;
+      color: var(--primary-color);
+      font-weight: bold;
+      margin-bottom: 10px;
+    }
+    .claimed {
+      border-color: #bfbfbf;
+      background-color: #f5f5f5;
+    }
+    .claimed .ticket-title {
+      color: #8c8c8c;
+      text-decoration: line-through;
+    }
+    .loading-spinner {
+      text-align: center;
+      padding: 20px;
+      font-weight: bold;
+      color: var(--primary-color);
     }
   </style>
 </head>
 <body>
 
-  <div class="screen-container" id="screen">
-    <div class="no-message" id="fallback">メッセージを待っています...</div>
+  <div class="container">
+    <!-- ローディング表示 -->
+    <div id="loading" class="loading-spinner hidden">処理中...</div>
+
+    <!-- 1日1回制限メッセージ -->
+    <div id="already-submitted-view" class="hidden">
+      <h1>本日は回答済みです</h1>
+      <p style="text-align: center; line-height: 1.6;">
+        アンケートの回答は1日1回までとなっております。<br>また明日以降のご参加をお待ちしております！
+      </p>
+    </div>
+
+    <!-- STEP 1: 選択式アンケート (Q1〜Q5) -->
+    <div id="step-survey">
+      <div class="notice-header notice-private">🔒 このステップの回答は公開されません</div>
+      <form id="survey-form">
+        <h1>アンケート回答</h1>
+        
+        <div class="form-group">
+          <label>Q1. 本日のイベントはいかがでしたか？</label>
+          <select name="q1" required>
+            <option value="">選択してください</option>
+            <option value="大変満足">大変満足</option>
+            <option value="満足">満足</option>
+            <option value="普通">普通</option>
+            <option value="不満">不満</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label>Q2. 会場の雰囲気はいかがでしたか？</label>
+          <select name="q2" required>
+            <option value="">選択してください</option>
+            <option value="良い">良い</option>
+            <option value="普通">普通</option>
+            <option value="改善の余地あり">改善の余地あり</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label>Q3. イベントを知ったきっかけは何ですか？</label>
+          <select name="q3" required>
+            <option value="">選択してください</option>
+            <option value="SNS">SNS</option>
+            <option value="知人の紹介">知人の紹介</option>
+            <option value="チラシ・ポスター">チラシ・ポスター</option>
+            <option value="その他">その他</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label>Q4. 次回も参加したいですか？</label>
+          <select name="q4" required>
+            <option value="">選択してください</option>
+            <option value="ぜひ参加したい">ぜひ参加したい</option>
+            <option value="内容次第で参加したい">内容次第で参加したい</option>
+            <option value="参加しない">参加しない</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label>Q5. お住まいの地域を教えてください</label>
+          <select name="q5" required>
+            <option value="">選択してください</option>
+            <option value="市内">市内</option>
+            <option value="県内（市外）">県内（市外）</option>
+            <option value="県外">県外</option>
+          </select>
+        </div>
+
+        <button type="button" id="to-message-btn">次へ（メッセージ入力へ）</button>
+      </form>
+    </div>
+
+    <!-- STEP 2: メッセージ入力 -->
+    <div id="step-message" class="hidden">
+      <div class="notice-header notice-public">📢 メッセージは会場のスクリーンに公開されます！</div>
+      <h1>メッセージ入力</h1>
+      <div class="form-group">
+        <label for="message">会場のスクリーンに届くメッセージをどうぞ！</label>
+        <textarea id="message" rows="4" placeholder="応援コメントや感想を入力してください（任意）" maxlength="100"></textarea>
+      </div>
+      <button type="button" id="submit-btn">メッセージを送信して賞品をもらう</button>
+    </div>
+
+    <!-- STEP 3: 賞品引き換え・スタッフ消込画面 -->
+    <div id="ticket-view" class="hidden">
+      <h1>賞品引き換え画面</h1>
+      
+      <div id="ticket-box" class="ticket">
+        <div class="ticket-title">🎁 賞品引き換え券 🎁</div>
+        <p id="ticket-status-text">スタッフにこの画面を提示してください</p>
+      </div>
+
+      <!-- スタッフ専用消込エリア（確認ダイヤログ方式） -->
+      <div id="staff-area">
+        <button id="claim-btn" style="background-color: #389e0d;">【スタッフ操作】消込処理をする</button>
+      </div>
+    </div>
   </div>
 
   <script>
     // ⚠️ 取得したGASのウェブアプリURLをここに貼り付けてください
     const GAS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwCYEdOgFAy09NT9-KjcKNARvFM0IegazLoCjMOi-nZOU1m97OmFp8u3rvw66IGQUWgYQ/exec";
-    
-    const screen = document.getElementById('screen');
-    const fallback = document.getElementById('fallback');
-    
-    let messageList = [];  // スプレッドシートから取得した最新10件の格納用
-    let currentIndex = 0;  // 現在何番目を表示しているか
-    let loopInterval = null;
 
-    // 🔄 1. サーバーから最新10件を引っ張ってくる関数
-    async function fetchLatestMessages() {
-      try {
-        const response = await fetch(`${GAS_WEB_APP_URL}?action=getMessages`);
-        const result = await response.json();
+    const stepSurvey = document.getElementById('step-survey');
+    const stepMessage = document.getElementById('step-message');
+    const ticketView = document.getElementById('ticket-view');
+    const ticketBox = document.getElementById('ticket-box');
+    const ticketStatusText = document.getElementById('ticket-status-text');
+    const alreadySubmittedView = document.getElementById('already-submitted-view');
+    const loading = document.getElementById('loading');
+    const staffArea = document.getElementById('staff-area');
+    const claimBtn = document.getElementById('claim-btn');
+    const toMessageBtn = document.getElementById('to-message-btn');
+    const submitBtn = document.getElementById('submit-btn');
+
+    let surveyData = {};
+    let currentResponseId = null;
+
+    // ページロード時の初期処理
+    window.addEventListener('DOMContentLoaded', async () => {
+      const todayStr = new Date().toISOString().split('T')[0];
+      const lastSubmitDate = localStorage.getItem('last_submit_date');
+      const savedResponseId = localStorage.getItem('current_response_id');
+
+      if (lastSubmitDate === todayStr) {
+        // 今日すでに送信している場合、アンケート画面を非表示にする
+        stepSurvey.classList.add('hidden');
         
-        if (result.status === 'success' && result.messages.length > 0) {
-          // メッセージリストを更新
-          messageList = result.messages;
-          fallback.classList.add('hidden');
+        if (savedResponseId) {
+          showLoading(true);
+          const isClaimed = await checkClaimStatusFromServer(savedResponseId);
+          showLoading(false);
           
-          // ループタイマーがまだ動いていなければ起動
-          if (!loopInterval) {
-            startLoop();
-          }
-        } else if (result.messages.length === 0) {
-          messageList = [];
-          fallback.classList.remove('hidden');
-          fallback.innerText = "メッセージを待っています...";
+          currentResponseId = savedResponseId;
+          showTicketView(isClaimed);
+        } else {
+          alreadySubmittedView.classList.remove('hidden');
+        }
+      }
+    });
+
+    // STEP 1 から STEP 2 への遷移
+    toMessageBtn.addEventListener('click', () => {
+      const form = document.getElementById('survey-form');
+      if (!form.reportValidity()) {
+        return; // バリデーションエラー時は遷移しない
+      }
+      
+      const formData = new FormData(form);
+      surveyData = {
+        q1: formData.get('q1'),
+        q2: formData.get('q2'),
+        q3: formData.get('q3'),
+        q4: formData.get('q4'),
+        q5: formData.get('q5')
+      };
+
+      stepSurvey.classList.add('hidden');
+      stepMessage.classList.remove('hidden');
+    });
+
+    // STEP 2 送信処理
+    submitBtn.addEventListener('click', async () => {
+      showLoading(true);
+      const messageText = document.getElementById('message').value;
+
+      const payload = {
+        action: 'submitForm',
+        ...surveyData,
+        message: messageText
+      };
+
+      try {
+        const response = await fetch(GAS_WEB_APP_URL, {
+          method: 'POST',
+          body: JSON.stringify(payload)
+        });
+        const result = await response.json();
+
+        if (result.status === 'success') {
+          currentResponseId = result.id;
+          
+          // 送信履歴をローカルに保存
+          const todayStr = new Date().toISOString().split('T')[0];
+          localStorage.setItem('last_submit_date', todayStr);
+          localStorage.setItem('current_response_id', currentResponseId);
+
+          // メッセージ入力画面を隠して引き換え画面へ
+          stepMessage.classList.add('hidden');
+          showTicketView(false);
+        } else {
+          alert('送信に失敗しました。もう一度お試しください。');
         }
       } catch (err) {
-        console.error("データ取得エラー:", err);
+        console.error(err);
+        alert('通信エラーが発生しました。接続を確認してください。');
+      } finally {
+        showLoading(false);
       }
-    }
-
-    // 🎬 2. 5秒間隔のローテーションループを開始する関数
-    function startLoop() {
-      // 最初の1件目を即座に表示
-      renderNextMessage();
-      
-      // 以降、5秒ごとにループ
-      loopInterval = setInterval(() => {
-        renderNextMessage();
-      }, 5000);
-    }
-
-    // 📐 3. 次のメッセージを画面に描画する関数（スライド・フェードイン効果）
-    function renderNextMessage() {
-      if (messageList.length === 0) return;
-
-      // インデックスが配列を超えたら0に戻す（10件のループ再生）
-      if (currentIndex >= messageList.length) {
-        currentIndex = 0;
-      }
-
-      const text = messageList[currentIndex];
-      currentIndex++;
-
-      // 古い要素があればフェードアウトさせて消す
-      const oldCard = document.querySelector('.message-card');
-      if (oldCard) {
-        oldCard.style.opacity = '0';
-        oldCard.style.transform = 'translateY(-30px)';
-        setTimeout(() => oldCard.remove(), 800);
-      }
-
-      // 新しいメッセージカードを生成して追加
-      const newCard = document.createElement('div');
-      newCard.className = 'message-card';
-      newCard.innerText = text;
-      screen.appendChild(newCard);
-
-      // 一瞬だけ遅らせてアニメーションを発火させる
-      setTimeout(() => {
-        newCard.classList.add('active');
-      }, 50);
-    }
-
-    // 🚀 初期起動時の処理
-    window.addEventListener('DOMContentLoaded', () => {
-      // 最初にデータを取得
-      fetchLatestMessages();
-      
-      // その後は30秒ごとにスプレッドシートの最新状態（不適切非表示や新規投稿）を確認
-      setInterval(fetchLatestMessages, 30000);
     });
+
+    // スタッフ消込ボタンクリック処理（確認ダイアログ）
+    claimBtn.addEventListener('click', async () => {
+      const confirmClaim = confirm("【スタッフ確認】\n本当に賞品の引き換え（消込処理）を実行しますか？");
+      if (!confirmClaim) return;
+
+      showLoading(true);
+      try {
+        const response = await fetch(GAS_WEB_APP_URL, {
+          method: 'POST',
+          body: JSON.stringify({
+            action: 'claimPrize',
+            id: currentResponseId,
+            passcode: "1234" // スプレッドシート側の消込動作用にダミー送信（スプレッドシート処理側の変更は不要です）
+          })
+        });
+        const result = await response.json();
+
+        if (result.status === 'success') {
+          alert('賞品の引き換えが完了しました！');
+          showTicketView(true);
+        } else {
+          alert(result.message || 'エラーが発生しました。');
+        }
+      } catch (err) {
+        console.error(err);
+        alert('通信エラーが発生しました。');
+      } finally {
+        showLoading(false);
+      }
+    });
+
+    // ヘルパー関数群
+    function showLoading(show) {
+      if (show) {
+        loading.classList.remove('hidden');
+      } else {
+        loading.classList.add('hidden');
+      }
+    }
+
+    async function checkClaimStatusFromServer(id) {
+      try {
+        const response = await fetch(`${GAS_WEB_APP_URL}?action=checkStatus&id=${id}`);
+        const result = await response.json();
+        return result.status === 'success' ? result.claimed : false;
+      } catch (err) {
+        console.error(err);
+        return false;
+      }
+    }
+
+    function showTicketView(isClaimed) {
+      ticketView.classList.remove('hidden');
+      if (isClaimed) {
+        ticketBox.classList.add('claimed');
+        ticketStatusText.innerHTML = "✨ <b>引き換え済み</b> ✨<br>ありがとうございました！";
+        staffArea.classList.add('hidden');
+      } else {
+        ticketBox.classList.remove('claimed');
+        ticketStatusText.innerHTML = "スタッフにこの画面を提示してください";
+        staffArea.classList.remove('hidden');
+      }
+    }
   </script>
 </body>
 </html>
