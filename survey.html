@@ -37,7 +37,7 @@
       color: var(--primary-color);
     }
     .hidden { display: none !important; }
-
+    
     /* 警告・注意書きヘッダー */
     .notice-header {
       padding: 10px 14px;
@@ -214,8 +214,11 @@
       <div class="notice-header notice-public">📢 メッセージは会場のスクリーンに公開されます！</div>
       <h1>メッセージ入力</h1>
       <div class="form-group">
-        <label for="message">会場のスクリーンに届くメッセージをどうぞ！</label>
-        <textarea id="message" rows="4" placeholder="応援コメントや感想を入力してください（任意）" maxlength="100"></textarea>
+        <label for="message">メッセージ（35文字まで）</label>
+        <textarea id="message" rows="3" placeholder="会場を盛り上げるメッセージを入力してください（最大35文字）" maxlength="35"></textarea>
+        <div style="text-align: right; font-size: 0.8rem; color: var(--gray-color); margin-top: 4px;">
+          <span id="char-count">0</span> / 35文字
+        </div>
       </div>
       <button type="button" id="submit-btn">メッセージを送信して賞品をもらう</button>
     </div>
@@ -251,9 +254,16 @@
     const claimBtn = document.getElementById('claim-btn');
     const toMessageBtn = document.getElementById('to-message-btn');
     const submitBtn = document.getElementById('submit-btn');
+    const messageInput = document.getElementById('message');
+    const charCount = document.getElementById('char-count');
 
     let surveyData = {};
     let currentResponseId = null;
+
+    // 文字数カウンターの連動
+    messageInput.addEventListener('input', () => {
+      charCount.textContent = messageInput.value.length;
+    });
 
     // ページロード時の初期処理
     window.addEventListener('DOMContentLoaded', async () => {
@@ -262,7 +272,6 @@
       const savedResponseId = localStorage.getItem('current_response_id');
 
       if (lastSubmitDate === todayStr) {
-        // 今日すでに送信している場合、アンケート画面を非表示にする
         stepSurvey.classList.add('hidden');
         
         if (savedResponseId) {
@@ -282,7 +291,7 @@
     toMessageBtn.addEventListener('click', () => {
       const form = document.getElementById('survey-form');
       if (!form.reportValidity()) {
-        return; // バリデーションエラー時は遷移しない
+        return;
       }
       
       const formData = new FormData(form);
@@ -301,7 +310,7 @@
     // STEP 2 送信処理
     submitBtn.addEventListener('click', async () => {
       showLoading(true);
-      const messageText = document.getElementById('message').value;
+      const messageText = messageInput.value;
 
       const payload = {
         action: 'submitForm',
@@ -319,12 +328,10 @@
         if (result.status === 'success') {
           currentResponseId = result.id;
           
-          // 送信履歴をローカルに保存
           const todayStr = new Date().toISOString().split('T')[0];
           localStorage.setItem('last_submit_date', todayStr);
           localStorage.setItem('current_response_id', currentResponseId);
 
-          // メッセージ入力画面を隠して引き換え画面へ
           stepMessage.classList.add('hidden');
           showTicketView(false);
         } else {
@@ -332,13 +339,13 @@
         }
       } catch (err) {
         console.error(err);
-        alert('通信エラーが発生しました。接続を確認してください。');
+        alert('通信エラーが発生しました。');
       } finally {
         showLoading(false);
       }
     });
 
-    // スタッフ消込ボタンクリック処理（確認ダイアログ）
+    // スタッフ消込ボタンクリック処理
     claimBtn.addEventListener('click', async () => {
       const confirmClaim = confirm("【スタッフ確認】\n本当に賞品の引き換え（消込処理）を実行しますか？");
       if (!confirmClaim) return;
@@ -350,7 +357,7 @@
           body: JSON.stringify({
             action: 'claimPrize',
             id: currentResponseId,
-            passcode: "1111" // スプレッドシート側の消込動作用にダミー送信（スプレッドシート処理側の変更は不要です）
+            passcode: "1234"
           })
         });
         const result = await response.json();
@@ -369,7 +376,6 @@
       }
     });
 
-    // ヘルパー関数群
     function showLoading(show) {
       if (show) {
         loading.classList.remove('hidden');
