@@ -9,13 +9,13 @@
       margin: 0;
       padding: 0;
       background-color: #fff2e6; /* 温かみのある薄いパステルオレンジ */
-      color: #5c3a21;            /* 視認性の高い、はっきりとした濃いブラウン */
       font-family: 'Helvetica Neue', Arial, 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
       overflow: hidden;
       height: 100vh;
       display: flex;
       justify-content: center;
       align-items: center;
+      position: relative;
     }
 
     /* メッセージを表示する外枠のコンテナ */
@@ -30,17 +30,24 @@
 
     /* メッセージテキスト自体のスタイル */
     .message-card {
-      font-size: 4.5rem;
       font-weight: bold;
       text-align: center;
       line-height: 1.5;
-      max-width: 100%;
+      max-width: 95%;
       word-break: break-all;
       opacity: 0;
       transform: translateY(30px);
       transition: opacity 0.8s ease, transform 0.8s ease;
       position: absolute;
-      text-shadow: 2px 2px 4px rgba(255, 255, 255, 0.8); /* 文字をよりくっきり際立たせる */
+      text-shadow: 2px 2px 8px rgba(255, 255, 255, 0.9); /* 白のシャドウで可読性を強固に補強 */
+    }
+
+    /* 文字数に合わせたフォントサイズ調整用のクラス */
+    .size-large {
+      font-size: 5rem;    /* 20文字以下：大きく表示 */
+    }
+    .size-medium {
+      font-size: 3.6rem;  /* 21〜35文字：少し小さくして折り返しを綺麗に */
     }
 
     /* 表示状態のアニメーション用クラス */
@@ -48,23 +55,55 @@
       opacity: 1;
       transform: translateY(0);
     }
+
+    /* フルスクリーンボタン */
+    .fullscreen-btn {
+      position: absolute;
+      bottom: 20px;
+      right: 20px;
+      background-color: rgba(255, 122, 69, 0.2);
+      color: #8c532e;
+      border: 1px solid rgba(255, 122, 69, 0.4);
+      padding: 8px 12px;
+      border-radius: 6px;
+      font-size: 0.85rem;
+      cursor: pointer;
+      transition: background-color 0.2s, color 0.2s;
+      z-index: 100;
+    }
+    .fullscreen-btn:hover {
+      background-color: rgba(255, 122, 69, 0.8);
+      color: white;
+    }
   </style>
 </head>
 <body>
 
-  <div class="screen-container" id="screen">
-    <!-- 薄い文字を一切排除し、完全に空にしています -->
-  </div>
+  <div class="screen-container" id="screen"></div>
+  
+  <!-- 全画面切り替えボタン -->
+  <button class="fullscreen-btn" id="fs-btn">🖥️ 全画面表示</button>
 
   <script>
     // ⚠️ 取得したGASのウェブアプリURLをここに貼り付けてください
     const GAS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwCYEdOgFAy09NT9-KjcKNARvFM0IegazLoCjMOi-nZOU1m97OmFp8u3rvw66IGQUWgYQ/exec";
     
     const screen = document.getElementById('screen');
-        
+    const fsBtn = document.getElementById('fs-btn');
+    
     let messageList = [];  // スプレッドシートから取得した最新10件の格納用
     let currentIndex = 0;  // 現在何番目を表示しているか
     let loopInterval = null;
+
+    // パステルオレンジ背景（#fff2e6）に映える、視認性が抜群で温かみのあるカラーパレット
+    const readabilityColors = [
+      '#5c3a21', // リッチブラウン
+      '#bf360c', // ダークアプリコット・テラコッタ
+      '#0d47a1', // ロイヤルブルー（知的な差し色）
+      '#1b5e20', // フォレストグリーン（ナチュラルな優しさ）
+      '#4a148c', // ディープパープル
+      '#b71c1c'  // カーマインレッド
+    ];
 
     // 🔄 1. サーバーから最新10件を引っ張ってくる関数
     async function fetchLatestMessages() {
@@ -75,7 +114,6 @@
         if (result.status === 'success' && result.messages.length > 0) {
           messageList = result.messages;
           
-          // ループタイマーがまだ動いていなければ起動
           if (!loopInterval) {
             startLoop();
           }
@@ -97,7 +135,6 @@
       }, 5000);
     }
 
-    // 🎨 画面のメッセージカードを安全に消去する関数
     function clearScreen() {
       const oldCard = document.querySelector('.message-card');
       if (oldCard) {
@@ -105,7 +142,7 @@
       }
     }
 
-    // 📐 3. 次のメッセージを画面に描画する関数（スライド・フェードイン効果）
+    // 📐 3. 次のメッセージを描画する関数（ランダム配色 ＆ 文字サイズ可変）
     function renderNextMessage() {
       if (messageList.length === 0) {
         clearScreen();
@@ -119,7 +156,7 @@
       const text = messageList[currentIndex];
       currentIndex++;
 
-      // 古い要素があればフェードアウトさせて消去
+      // 古いカードをフェードアウト退場
       const oldCard = document.querySelector('.message-card');
       if (oldCard) {
         oldCard.style.opacity = '0';
@@ -127,22 +164,52 @@
         setTimeout(() => oldCard.remove(), 800);
       }
 
-      // 新しいメッセージカードを生成して追加
+      // 新しいメッセージカードを生成
       const newCard = document.createElement('div');
-      newCard.className = 'message-card';
+      
+      // 文字数による最適なフォントサイズクラスの適用
+      if (text.length <= 20) {
+        newCard.className = 'message-card size-large';
+      } else {
+        newCard.className = 'message-card size-medium';
+      }
+
+      // カラーパレットからランダムで1色選択して設定
+      const randomColor = readabilityColors[Math.floor(Math.random() * readabilityColors.length)];
+      newCard.style.color = randomColor;
       newCard.innerText = text;
+      
       screen.appendChild(newCard);
 
-      // 一瞬だけ遅らせてアニメーションを発火
+      // アニメーションのトリガー
       setTimeout(() => {
         newCard.classList.add('active');
       }, 50);
     }
 
-    // 🚀 初期起動時の処理
+    // 🖥️ 4. フルスクリーン（全画面）切り替え制御
+    fsBtn.addEventListener('click', () => {
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen().then(() => {
+          fsBtn.innerText = "✖ 全画面解除";
+        }).catch(err => {
+          alert(`全画面表示への切り替えに失敗しました: ${err.message}`);
+        });
+      } else {
+        document.exitFullscreen().then(() => {
+          fsBtn.innerText = "🖥️ 全画面表示";
+        });
+      }
+    });
+
+    // 画面ダブルクリックでも全画面切り替えできるようにする（便利機能）
+    document.addEventListener('dblclick', () => {
+      fsBtn.click();
+    });
+
+    // 🚀 初期起動
     window.addEventListener('DOMContentLoaded', () => {
       fetchLatestMessages();
-      
       // 30秒ごとにスプレッドシートの最新状態を確認
       setInterval(fetchLatestMessages, 30000);
     });
