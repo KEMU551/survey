@@ -131,7 +131,7 @@
     }
     .fullscreen-btn.hidden {
       opacity: 0;
-      pointer-events: none; /* クリックもできないようにする */
+      pointer-events: none; /* 全画面時はクリックを無効化 */
     }
   </style>
 </head>
@@ -139,7 +139,7 @@
 
   <div class="screen-container" id="screen"></div>
   
-  <!-- 波紋演出用のダミーコンテナ -->
+  <!-- 波紋演出用のエフェクトコンテナ -->
   <div id="effect-container" style="position: absolute; width: 100%; height: 100%; overflow: hidden; pointer-events: none; top: 0; left: 0;"></div>
   
   <!-- 全画面切り替えボタン -->
@@ -153,7 +153,7 @@
     const fsBtn = document.getElementById('fs-btn');
     const effectContainer = document.getElementById('effect-container');
     
-    let messageList = [];       // 現在のメッセージリスト
+    let messageList = [];       // 現在のループ再生用メッセージ配列
     let knownMessages = new Set(); // すでに一度でも読み込んだことのあるメッセージ（既読リスト）
     let currentIndex = 0;
     let loopInterval = null;
@@ -175,18 +175,51 @@
         const result = await response.json();
         
         if (result.status === 'success' && result.messages.length > 0) {
-          const fetchedMessages = result.messages;
+          const fetchedMessages = result.messages; // GAS側が最新順（新しい順）で返してくると想定
 
-          // 💡 初回ロード時は、取得したすべてのメッセージを「既読（新着扱いしない）」にする
+          // 初回ロード時：取得した全メッセージを既読にし、ベースのループ配列を作る
           if (knownMessages.size === 0) {
             fetchedMessages.forEach(msg => knownMessages.add(msg));
+            messageList = [...fetchedMessages];
+            startLoop();
+            return;
           }
 
-          messageList = fetchedMessages;
-          
-          if (!loopInterval) {
-            startLoop();
+          // 🚨 新着メッセージの割り込みチェック
+          // 最新のメッセージ（配列の先頭）が未読か確認
+          let newMessages = [];
+          for (let i = 0; i < fetchedMessages.length; i++) {
+            if (!knownMessages.has(fetchedMessages[i])) {
+              newMessages.push(fetchedMessages[i]);
+            } else {
+              break; // 既読に出会ったらそれ以降は古いので終了
+            }
           }
+
+          if (newMessages.length > 0) {
+            // 新着メッセージを既読リストに追加
+            newMessages.forEach(msg => knownMessages.add(msg));
+
+            // 現在のループ配列の「次の位置」に新着メッセージを割り込ませる
+            // 反映順を古い順に並び替えて差し込むことで、複数同時に来ても破綻しません
+            messageList.splice(currentIndex, 0, ...newMessages.reverse());
+
+            // ⚡ 順番待ちをスキップして、今すぐ新着を表示する（タイマーもリセット）
+            if (loopInterval) clearInterval(loopInterval);
+            renderNextMessage(true); // 新着フラグ（演出付き）で即時描画
+            
+            // 5秒の通常ループタイマーを再始動
+            loopInterval = setInterval(() => {
+              renderNextMessage(false);
+            }, 5000);
+
+            // 新着の割り込み表示が終わる頃に、全体のリスト構造を最新状態に同期
+            setTimeout(() => {
+              messageList = [...fetchedMessages];
+              currentIndex = (fetchedMessages.indexOf(newMessages[0]) + 1) % messageList.length;
+            }, 4500);
+          }
+
         } else if (result.messages.length === 0) {
           messageList = [];
           clearScreen();
@@ -196,28 +229,29 @@
       }
     }
 
-    // 🎬 2. 5秒間隔のループを開始
+    // 🎬 2. 通常の5秒間隔ループを開始
     function startLoop() {
-      renderNextMessage();
+      if (loopInterval) clearInterval(loopInterval);
+      renderNextMessage(false);
       
       loopInterval = setInterval(() => {
-        renderNextMessage();
+        renderNextMessage(false);
       }, 5000);
     }
 
     function clearScreen() {
       const oldCard = document.querySelector('.message-card');
-      if (oldCard) {
-        oldCard.remove();
+      if (oldCard) oldCard.remove();
+      if (loopInterval) {
+        clearInterval(loopInterval);
+        loopInterval = null;
       }
     }
 
     // ✨ 3. 波紋（パルス）エフェクトを発生させる関数
     function triggerPulseEffect() {
-      // 既存のパルスリングをクリア
       effectContainer.innerHTML = '';
 
-      // 中央にリングを生成
       const ring = document.createElement('div');
       ring.className = 'pulse-ring';
       // 画面中央に配置
@@ -232,8 +266,8 @@
       }, 50);
     }
 
-    // 📐 4. 次のメッセージを描画（既読チェック＆新着時スペシャル演出）
-    function renderNextMessage() {
+    // 📐 4. メッセージを描画する関数
+    function renderNextMessage(isForceNew = false) {
       if (messageList.length === 0) {
         clearScreen();
         return;
@@ -246,12 +280,6 @@
       const text = messageList[currentIndex];
       currentIndex++;
 
-      // 💡 未読（新着）コメントかどうかを判定
-      const isNewMessage = !knownMessages.has(text);
-      if (isNewMessage) {
-        knownMessages.add(text); // 既読リストに登録
-      }
-
       // 古いカードを退場させる
       const oldCard = document.querySelector('.message-card');
       if (oldCard) {
@@ -262,7 +290,6 @@
 
       // 新しいメッセージカードを生成
       const newCard = document.createElement('div');
-      
       if (text.length <= 20) {
         newCard.className = 'message-card size-large';
       } else {
@@ -275,36 +302,29 @@
       
       screen.appendChild(newCard);
 
-      // 🌟 新着メッセージだった場合の豪華演出
-      if (isNewMessage) {
-        // パルス（波紋）を広げる
+      // 🌟 強制新着フラグ、または通常の演出判定
+      if (isForceNew) {
         triggerPulseEffect();
-        // 新着用のポップ弾むアニメーションクラスを付与
         setTimeout(() => {
           newCard.classList.add('new-arrival');
         }, 50);
       } else {
-        // 通常のフワッとした表示
         setTimeout(() => {
           newCard.classList.add('active');
         }, 50);
       }
     }
 
-    // 🖥️ 5. フルスクリーン（全画面）切り替え制御
-    fsBtn.addEventListener('click', () => {
-      toggleFullscreen();
-    });
-
-    // ダブルクリックでもフルスクリーン切り替え可能
-    document.addEventListener('dblclick', () => {
-      toggleFullscreen();
-    });
+    // 🖥️ 5. フルスクリーン切り替え制御
+    fsBtn.addEventListener('click', () => toggleFullscreen());
+    
+    // 画面のどこでもダブルクリックすればフルスクリーンを切り替え可能
+    document.addEventListener('dblclick', () => toggleFullscreen());
 
     function toggleFullscreen() {
       if (!document.fullscreenElement) {
         document.documentElement.requestFullscreen().then(() => {
-          // 全画面になったらボタンを完全に消去して、見えなくする
+          // 全画面になったらボタンを完全に隠す
           fsBtn.classList.add('hidden');
         }).catch(err => {
           alert(`全画面表示への切り替えに失敗しました: ${err.message}`);
@@ -314,7 +334,7 @@
       }
     }
 
-    // ブラウザ標準の機能で全画面が解除された（Escキーなど）のを検知してボタンを復活させる
+    // Escキーなど、ブラウザ標準機能で全画面が解除されたのを検知してボタンを戻す
     document.addEventListener('fullscreenchange', () => {
       if (!document.fullscreenElement) {
         fsBtn.classList.remove('hidden');
@@ -325,8 +345,8 @@
     // 🚀 初期起動
     window.addEventListener('DOMContentLoaded', () => {
       fetchLatestMessages();
-      // パトロール間隔を 3秒（3000ms）に短縮してリアルタイム性をアップ！
-      setInterval(fetchLatestMessages, 3000); 
+      // 3秒（3000ms）ごとに新着がないかバックグラウンドで監視し、リアルタイム性を維持
+      setInterval(fetchLatestMessages, 3000);
     });
   </script>
 </body>
