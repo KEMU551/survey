@@ -110,7 +110,7 @@
 
     /* ーーー ーーーーーーーーーーーーーーーーーーーーーー ーーー */
 
-    /* フルスクリーンボタン（全画面時は自動で非表示になります） */
+    /* フルスクリーンボタン */
     .fullscreen-btn {
       position: absolute;
       bottom: 20px;
@@ -131,7 +131,7 @@
     }
     .fullscreen-btn.hidden {
       opacity: 0;
-      pointer-events: none; /* 全画面時はクリックを無効化 */
+      pointer-events: none;
     }
   </style>
 </head>
@@ -153,19 +153,13 @@
     const fsBtn = document.getElementById('fs-btn');
     const effectContainer = document.getElementById('effect-container');
     
-    let messageList = [];       // 現在のループ再生用メッセージ配列
-    let knownMessages = new Set(); // すでに一度でも読み込んだことのあるメッセージ（既読リスト）
+    let messageList = [];       // ループ再生用の全メッセージ配列
+    let knownMessages = new Set(); // 既読メッセージのセット
     let currentIndex = 0;
     let loopInterval = null;
 
-    // パステルオレンジ背景に映える、視認性の高いカラーパレット
     const readabilityColors = [
-      '#5c3a21', // リッチブラウン
-      '#bf360c', // ダークアプリコット・テラコッタ
-      '#0d47a1', // ロイヤルブルー
-      '#1b5e20', // フォレストグリーン
-      '#4a148c', // ディープパープル
-      '#b71c1c'  // カーマインレッド
+      '#5c3a21', '#bf360c', '#0d47a1', '#1b5e20', '#4a148c', '#b71c1c'
     ];
 
     // 🔄 1. サーバーから最新メッセージを取得
@@ -175,49 +169,46 @@
         const result = await response.json();
         
         if (result.status === 'success' && result.messages.length > 0) {
-          const fetchedMessages = result.messages; // GAS側が最新順（新しい順）で返してくると想定
+          const fetchedMessages = result.messages; // 古いものが先頭（新着が末尾）の配列
 
-          // 初回ロード時：取得した全メッセージを既読にし、ベースのループ配列を作る
+          // 【初回読み込み時】
           if (knownMessages.size === 0) {
             fetchedMessages.forEach(msg => knownMessages.add(msg));
-            messageList = [...fetchedMessages];
+            // ループ表示用に「新しい順（配列を逆転）」にして保持する
+            messageList = [...fetchedMessages].reverse();
             startLoop();
             return;
           }
 
-          // 🚨 新着メッセージの割り込みチェック
-          // 最新のメッセージ（配列の先頭）が未読か確認
+          // 【2回目以降：新着メッセージの抽出】
+          // GASの仕様に合わせて「配列の末尾（最新投稿）」から逆順に未読をチェック
           let newMessages = [];
-          for (let i = 0; i < fetchedMessages.length; i++) {
+          for (let i = fetchedMessages.length - 1; i >= 0; i--) {
             if (!knownMessages.has(fetchedMessages[i])) {
-              newMessages.push(fetchedMessages[i]);
+              newMessages.push(fetchedMessages[i]); // 新しいものから順に入る
             } else {
-              break; // 既読に出会ったらそれ以降は古いので終了
+              break; // 既読に出会ったら終了
             }
           }
 
+          // 🔥 新着があった場合の割り込み処理
           if (newMessages.length > 0) {
-            // 新着メッセージを既読リストに追加
             newMessages.forEach(msg => knownMessages.add(msg));
 
-            // 現在のループ配列の「次の位置」に新着メッセージを割り込ませる
-            // 反映順を古い順に並び替えて差し込むことで、複数同時に来ても破綻しません
-            messageList.splice(currentIndex, 0, ...newMessages.reverse());
-
-            // ⚡ 順番待ちをスキップして、今すぐ新着を表示する（タイマーもリセット）
-            if (loopInterval) clearInterval(loopInterval);
-            renderNextMessage(true); // 新着フラグ（演出付き）で即時描画
+            // 全体の再生リストを最新状態（新しい順）に更新
+            messageList = [...fetchedMessages].reverse();
             
-            // 5秒の通常ループタイマーを再始動
+            // 次に再生すべき位置を「新着メッセージの先頭」にするために、インデックスを0番目に強制リセット
+            currentIndex = 0; 
+
+            // ⚡ 5秒タイマーを一度クリアし、即座に新着演出で表示
+            if (loopInterval) clearInterval(loopInterval);
+            renderNextMessage(true); 
+
+            // 5秒の通常ループを再開
             loopInterval = setInterval(() => {
               renderNextMessage(false);
             }, 5000);
-
-            // 新着の割り込み表示が終わる頃に、全体のリスト構造を最新状態に同期
-            setTimeout(() => {
-              messageList = [...fetchedMessages];
-              currentIndex = (fetchedMessages.indexOf(newMessages[0]) + 1) % messageList.length;
-            }, 4500);
           }
 
         } else if (result.messages.length === 0) {
@@ -248,31 +239,28 @@
       }
     }
 
-    // ✨ 3. 波紋（パルス）エフェクトを発生させる関数
+    // ✨ 3. 波紋（パルス）エフェクト
     function triggerPulseEffect() {
       effectContainer.innerHTML = '';
-
       const ring = document.createElement('div');
       ring.className = 'pulse-ring';
-      // 画面中央に配置
       ring.style.left = 'calc(50vw - 50px)';
       ring.style.top = 'calc(50vh - 50px)';
-      
       effectContainer.appendChild(ring);
 
-      // アニメーション開始
       setTimeout(() => {
         ring.classList.add('active');
       }, 50);
     }
 
-    // 📐 4. メッセージを描画する関数
+    // 📐 4. メッセージを描画
     function renderNextMessage(isForceNew = false) {
       if (messageList.length === 0) {
         clearScreen();
         return;
       }
 
+      // ループが末尾まで来たら先頭に戻る
       if (currentIndex >= messageList.length) {
         currentIndex = 0;
       }
@@ -302,7 +290,7 @@
       
       screen.appendChild(newCard);
 
-      // 🌟 強制新着フラグ、または通常の演出判定
+      // エフェクトの適用
       if (isForceNew) {
         triggerPulseEffect();
         setTimeout(() => {
@@ -317,14 +305,11 @@
 
     // 🖥️ 5. フルスクリーン切り替え制御
     fsBtn.addEventListener('click', () => toggleFullscreen());
-    
-    // 画面のどこでもダブルクリックすればフルスクリーンを切り替え可能
     document.addEventListener('dblclick', () => toggleFullscreen());
 
     function toggleFullscreen() {
       if (!document.fullscreenElement) {
         document.documentElement.requestFullscreen().then(() => {
-          // 全画面になったらボタンを完全に隠す
           fsBtn.classList.add('hidden');
         }).catch(err => {
           alert(`全画面表示への切り替えに失敗しました: ${err.message}`);
@@ -334,7 +319,6 @@
       }
     }
 
-    // Escキーなど、ブラウザ標準機能で全画面が解除されたのを検知してボタンを戻す
     document.addEventListener('fullscreenchange', () => {
       if (!document.fullscreenElement) {
         fsBtn.classList.remove('hidden');
@@ -345,7 +329,7 @@
     // 🚀 初期起動
     window.addEventListener('DOMContentLoaded', () => {
       fetchLatestMessages();
-      // 3秒（3000ms）ごとに新着がないかバックグラウンドで監視し、リアルタイム性を維持
+      // 正しく 3秒（3000ms）ごとにバックグラウンドで新着チェック
       setInterval(fetchLatestMessages, 3000);
     });
   </script>
