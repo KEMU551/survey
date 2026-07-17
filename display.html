@@ -39,24 +39,78 @@
       transform: translateY(30px);
       transition: opacity 0.8s ease, transform 0.8s ease;
       position: absolute;
-      text-shadow: 2px 2px 8px rgba(255, 255, 255, 0.9); /* 白のシャドウで可読性を強固に補強 */
+      text-shadow: 2px 2px 8px rgba(255, 255, 255, 0.9);
+      z-index: 10;
     }
 
     /* 文字数に合わせたフォントサイズ調整用のクラス */
     .size-large {
-      font-size: 5rem;    /* 20文字以下：大きく表示 */
+      font-size: 5rem;
     }
     .size-medium {
-      font-size: 3.6rem;  /* 21〜35文字：少し小さくして折り返しを綺麗に */
+      font-size: 3.6rem;
     }
 
-    /* 表示状態のアニメーション用クラス */
+    /* 通常の表示フェードイン */
     .message-card.active {
       opacity: 1;
       transform: translateY(0);
     }
 
-    /* フルスクリーンボタン */
+    /* ーーー ✨新着コメント時の追加演出エフェクト✨ ーーー */
+
+    /* 1. テキストがポップに跳ねるアニメーション */
+    @keyframes popIn {
+      0% {
+        opacity: 0;
+        transform: scale(0.3) rotate(-5deg);
+      }
+      50% {
+        transform: scale(1.1) rotate(3deg);
+      }
+      70% {
+        transform: scale(0.95) rotate(-1deg);
+      }
+      100% {
+        opacity: 1;
+        transform: scale(1) rotate(0deg);
+      }
+    }
+
+    .message-card.new-arrival {
+      animation: popIn 1.2s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+    }
+
+    /* 2. 背景に広がる光の波紋（パルス）エフェクト */
+    .pulse-ring {
+      position: absolute;
+      width: 100px;
+      height: 100px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(255,122,69,0.4) 0%, rgba(255,122,69,0) 70%);
+      opacity: 0;
+      pointer-events: none;
+      z-index: 1;
+    }
+
+    @keyframes pulseEffect {
+      0% {
+        transform: scale(1);
+        opacity: 1;
+      }
+      100% {
+        transform: scale(12);
+        opacity: 0;
+      }
+    }
+
+    .pulse-ring.active {
+      animation: pulseEffect 1.5s cubic-bezier(0.1, 0.8, 0.3, 1) forwards;
+    }
+
+    /* ーーー ーーーーーーーーーーーーーーーーーーーーーー ーーー */
+
+    /* フルスクリーンボタン（全画面時は自動で非表示になります） */
     .fullscreen-btn {
       position: absolute;
       bottom: 20px;
@@ -68,18 +122,25 @@
       border-radius: 6px;
       font-size: 0.85rem;
       cursor: pointer;
-      transition: background-color 0.2s, color 0.2s;
+      transition: background-color 0.2s, color 0.2s, opacity 0.3s ease;
       z-index: 100;
     }
     .fullscreen-btn:hover {
       background-color: rgba(255, 122, 69, 0.8);
       color: white;
     }
+    .fullscreen-btn.hidden {
+      opacity: 0;
+      pointer-events: none; /* クリックもできないようにする */
+    }
   </style>
 </head>
 <body>
 
   <div class="screen-container" id="screen"></div>
+  
+  <!-- 波紋演出用のダミーコンテナ -->
+  <div id="effect-container" style="position: absolute; width: 100%; height: 100%; overflow: hidden; pointer-events: none; top: 0; left: 0;"></div>
   
   <!-- 全画面切り替えボタン -->
   <button class="fullscreen-btn" id="fs-btn">🖥️ 全画面表示</button>
@@ -90,29 +151,38 @@
     
     const screen = document.getElementById('screen');
     const fsBtn = document.getElementById('fs-btn');
+    const effectContainer = document.getElementById('effect-container');
     
-    let messageList = [];  // スプレッドシートから取得した最新10件の格納用
-    let currentIndex = 0;  // 現在何番目を表示しているか
+    let messageList = [];       // 現在のメッセージリスト
+    let knownMessages = new Set(); // すでに一度でも読み込んだことのあるメッセージ（既読リスト）
+    let currentIndex = 0;
     let loopInterval = null;
 
-    // パステルオレンジ背景（#fff2e6）に映える、視認性が抜群で温かみのあるカラーパレット
+    // パステルオレンジ背景に映える、視認性の高いカラーパレット
     const readabilityColors = [
       '#5c3a21', // リッチブラウン
       '#bf360c', // ダークアプリコット・テラコッタ
-      '#0d47a1', // ロイヤルブルー（知的な差し色）
-      '#1b5e20', // フォレストグリーン（ナチュラルな優しさ）
+      '#0d47a1', // ロイヤルブルー
+      '#1b5e20', // フォレストグリーン
       '#4a148c', // ディープパープル
       '#b71c1c'  // カーマインレッド
     ];
 
-    // 🔄 1. サーバーから最新10件を引っ張ってくる関数
+    // 🔄 1. サーバーから最新メッセージを取得
     async function fetchLatestMessages() {
       try {
         const response = await fetch(`${GAS_WEB_APP_URL}?action=getMessages`);
         const result = await response.json();
         
         if (result.status === 'success' && result.messages.length > 0) {
-          messageList = result.messages;
+          const fetchedMessages = result.messages;
+
+          // 💡 初回ロード時は、取得したすべてのメッセージを「既読（新着扱いしない）」にする
+          if (knownMessages.size === 0) {
+            fetchedMessages.forEach(msg => knownMessages.add(msg));
+          }
+
+          messageList = fetchedMessages;
           
           if (!loopInterval) {
             startLoop();
@@ -126,7 +196,7 @@
       }
     }
 
-    // 🎬 2. 5秒間隔のローテーションループを開始する関数
+    // 🎬 2. 5秒間隔のループを開始
     function startLoop() {
       renderNextMessage();
       
@@ -142,7 +212,27 @@
       }
     }
 
-    // 📐 3. 次のメッセージを描画する関数（ランダム配色 ＆ 文字サイズ可変）
+    // ✨ 3. 波紋（パルス）エフェクトを発生させる関数
+    function triggerPulseEffect() {
+      // 既存のパルスリングをクリア
+      effectContainer.innerHTML = '';
+
+      // 中央にリングを生成
+      const ring = document.createElement('div');
+      ring.className = 'pulse-ring';
+      // 画面中央に配置
+      ring.style.left = 'calc(50vw - 50px)';
+      ring.style.top = 'calc(50vh - 50px)';
+      
+      effectContainer.appendChild(ring);
+
+      // アニメーション開始
+      setTimeout(() => {
+        ring.classList.add('active');
+      }, 50);
+    }
+
+    // 📐 4. 次のメッセージを描画（既読チェック＆新着時スペシャル演出）
     function renderNextMessage() {
       if (messageList.length === 0) {
         clearScreen();
@@ -156,7 +246,13 @@
       const text = messageList[currentIndex];
       currentIndex++;
 
-      // 古いカードをフェードアウト退場
+      // 💡 未読（新着）コメントかどうかを判定
+      const isNewMessage = !knownMessages.has(text);
+      if (isNewMessage) {
+        knownMessages.add(text); // 既読リストに登録
+      }
+
+      // 古いカードを退場させる
       const oldCard = document.querySelector('.message-card');
       if (oldCard) {
         oldCard.style.opacity = '0';
@@ -167,51 +263,70 @@
       // 新しいメッセージカードを生成
       const newCard = document.createElement('div');
       
-      // 文字数による最適なフォントサイズクラスの適用
       if (text.length <= 20) {
         newCard.className = 'message-card size-large';
       } else {
         newCard.className = 'message-card size-medium';
       }
 
-      // カラーパレットからランダムで1色選択して設定
       const randomColor = readabilityColors[Math.floor(Math.random() * readabilityColors.length)];
       newCard.style.color = randomColor;
       newCard.innerText = text;
       
       screen.appendChild(newCard);
 
-      // アニメーションのトリガー
-      setTimeout(() => {
-        newCard.classList.add('active');
-      }, 50);
+      // 🌟 新着メッセージだった場合の豪華演出
+      if (isNewMessage) {
+        // パルス（波紋）を広げる
+        triggerPulseEffect();
+        // 新着用のポップ弾むアニメーションクラスを付与
+        setTimeout(() => {
+          newCard.classList.add('new-arrival');
+        }, 50);
+      } else {
+        // 通常のフワッとした表示
+        setTimeout(() => {
+          newCard.classList.add('active');
+        }, 50);
+      }
     }
 
-    // 🖥️ 4. フルスクリーン（全画面）切り替え制御
+    // 🖥️ 5. フルスクリーン（全画面）切り替え制御
     fsBtn.addEventListener('click', () => {
+      toggleFullscreen();
+    });
+
+    // ダブルクリックでもフルスクリーン切り替え可能
+    document.addEventListener('dblclick', () => {
+      toggleFullscreen();
+    });
+
+    function toggleFullscreen() {
       if (!document.fullscreenElement) {
         document.documentElement.requestFullscreen().then(() => {
-          fsBtn.innerText = "✖ 全画面解除";
+          // 全画面になったらボタンを完全に消去して、見えなくする
+          fsBtn.classList.add('hidden');
         }).catch(err => {
           alert(`全画面表示への切り替えに失敗しました: ${err.message}`);
         });
       } else {
-        document.exitFullscreen().then(() => {
-          fsBtn.innerText = "🖥️ 全画面表示";
-        });
+        document.exitFullscreen();
       }
-    });
+    }
 
-    // 画面ダブルクリックでも全画面切り替えできるようにする（便利機能）
-    document.addEventListener('dblclick', () => {
-      fsBtn.click();
+    // ブラウザ標準の機能で全画面が解除された（Escキーなど）のを検知してボタンを復活させる
+    document.addEventListener('fullscreenchange', () => {
+      if (!document.fullscreenElement) {
+        fsBtn.classList.remove('hidden');
+        fsBtn.innerText = "🖥️ 全画面表示";
+      }
     });
 
     // 🚀 初期起動
     window.addEventListener('DOMContentLoaded', () => {
       fetchLatestMessages();
-      // 30秒ごとにスプレッドシートの最新状態を確認
-      setInterval(fetchLatestMessages, 30000);
+      // パトロール間隔を 3秒（3000ms）に短縮してリアルタイム性をアップ！
+      setInterval(fetchLatestMessages, 30000); 
     });
   </script>
 </body>
